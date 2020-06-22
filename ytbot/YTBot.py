@@ -60,7 +60,7 @@ class YTBot:
         None
 
         """
-        for url in self.list_urls:
+        for k, url in enumerate(self.list_urls):
             video = pytube.YouTube(url)
             video_title = video.player_response.get("videoDetails", {}).get("title")
             print(video_title)
@@ -78,7 +78,7 @@ class YTBot:
                 )
             )
             """
-
+            """
             print("------------------------------------------------")
             print(video.streams.filter(resolution="1080p")[0].itag)
             print("\n")
@@ -115,6 +115,64 @@ class YTBot:
             os.system(
                 "rm -rf {0}/video{1}.mp4 {2}/audio{3}.mp4".format(
                     self.extract_path, video_title, self.extract_path, video_title
+                )
+            )
+            """
+            allowed_resolutions = ["1080p", "720p", "360p", "240p"]
+
+            best_found = False
+            best_resolution = 1080
+            for resolution in allowed_resolutions:
+                if best_found is True:
+                    break
+                stream_list = video.streams.filter(
+                    resolution=resolution, mime_type="video/mp4", type="video"
+                )
+                if len(stream_list) == 0:
+                    print("No streams in {}".format(resolution))
+                else:
+                    best_found = True
+                    best_resolution = resolution
+                    print("------------------------------------------------")
+                    print("There are streams in {}".format(resolution))
+                    print(stream_list)
+                    print("------------------------------------------------")
+                    print("\n")
+
+                    video_itag = stream_list[0].itag
+
+            audio_streams = video.streams.filter(type="audio", mime_type="audio/mp4")
+            audio_itag = audio_streams[0].itag
+
+            # Download the videos
+            video.streams.get_by_itag(video_itag).download(
+                output_path=self.extract_path, filename="video{}".format(k)
+            )
+            video.streams.get_by_itag(audio_itag).download(
+                output_path=self.extract_path, filename="audio{}".format(k)
+            )
+            # Once you are done downloading, then you can combine the video and audio.
+            # video_title = re.sub(" ", "\ ", video_title)
+            # video_title = re.sub(":", "", video_title)
+            """
+            print(
+                "ffmpeg -i {0}/video{1}.mp4 -i {2}/audio{3}.mp4 -c:v copy -c:a aac {4}.mp4".format(
+                    self.extract_path,
+                    video_title,
+                    self.extract_path,
+                    video_title,
+                    video_title,
+                )
+            )
+            """
+            os.system(
+                "ffmpeg -i {0}/video{1}.mp4 -i {2}/audio{3}.mp4 -c:v copy -c:a aac video{4}_{5}.mp4".format(
+                    self.extract_path, k, self.extract_path, k, k, best_resolution
+                )
+            )
+            os.system(
+                "rm -rf {0}/video{1}.mp4 {2}/audio{3}.mp4".format(
+                    self.extract_path, k, self.extract_path, k
                 )
             )
 

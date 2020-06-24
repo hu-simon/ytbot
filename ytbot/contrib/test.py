@@ -11,11 +11,9 @@ def main():
         "https://www.youtube.com/watch?v=EkwqPJZe8ms",
         "https://www.youtube.com/watch?v=3tR6mKcBbT4",
     ]
-    extract_path = "/Users/shu/Desktop/ytbot/videos"
-    # extract_path = "/Users/administrator/Desktop/ytbot/videos"
-    ytdownloader = YouTubeDownloader(
-        url_list, extract_path="/Users/shu/Desktop/ytbot/videos/"
-    )
+    # extract_path = "/Users/shu/Desktop/ytbot/videos"
+    extract_path = "/Users/administrator/Desktop/ytbot/videos"
+    ytdownloader = YouTubeDownloader(url_list, extract_path=extract_path)
     start_time = time.perf_counter()
     ytdownloader.download_all_videos()
     finish_time = time.perf_counter()

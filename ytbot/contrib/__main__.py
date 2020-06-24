@@ -87,7 +87,7 @@ class YouTubeDownloader:
             if len(video_streams) != 0:
                 best_found = True
                 best_resolution = resolution
-                video_itag = video.streams[0].itag
+                video_itag = video_streams[0].itag
 
         audio_streams = video.streams.filter(type="audio", mime_type="audio/mp4")
         audio_itag = audio_streams[0].itag
@@ -110,6 +110,7 @@ class YouTubeDownloader:
         """
         video = pytube.YouTube(url)
         video_itag, audio_itag, best_resolution = self.find_itags(video)
+        print("Tags, video {} and audio {}".format(video_itag, audio_itag))
         video.streams.get_by_itag(video_itag).download(
             output_path=self.extract_path, filename="video{}".format(filename)
         )
@@ -119,6 +120,10 @@ class YouTubeDownloader:
 
         print("Downloaded video{} successfully.".format(filename))
 
+        del video
+        del video_itag
+        del audio_itag
+
     def download_all_videos(self):
         """
         Downloads all the videos, using the links in ``self.url_list`` as a reference.
@@ -127,8 +132,7 @@ class YouTubeDownloader:
         ---------
         ytbot.__main__.YouTubeDownloader.download_video : subroutine
         """
-        filenames = [k for k in range(self.n_urls)]
-        args = [(url, name) for (url, name) in zip(self.url_list, filenames)]
+        filenames = ["{}".format(k) for k in range(self.n_urls)]
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor(5) as executor:
             executor.map(self.download_video, self.url_list, filenames)

@@ -1,3 +1,10 @@
+"""
+Python implementation of the YouTubeDownloader, which downloads videos from YouTube, for dataset generation.
+
+TODO
+1. Make the code amenable to multiprocessing, to speed everything up.
+"""
+
 import os
 import re
 import datetime

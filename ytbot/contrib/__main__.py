@@ -117,6 +117,8 @@ class YouTubeDownloader:
             output_path=self.extract_path, filename="audio{}".format(filename)
         )
 
+        print("Downloaded video{} successfully.".format(filename))
+
     def download_all_videos(self):
         """
         Downloads all the videos, using the links in ``self.url_list`` as a reference.
@@ -125,4 +127,8 @@ class YouTubeDownloader:
         ---------
         ytbot.__main__.YouTubeDownloader.download_video : subroutine
         """
-        # Multithreading comes in here, since most of the operations are going to be I/O bound.
+        filenames = [k for k in range(self.n_urls)]
+        args = [(url, name) for (url, name) in zip(self.url_list, filenames)]
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            executor.map(self.download_video, self.url_list, filenames)

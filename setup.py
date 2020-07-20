@@ -37,4 +37,5 @@ setup(
     license="MPL-2.0",
     packages=["ytbot",],
     zip_safe=False,
+    install_requires=["pytube3"],
 )

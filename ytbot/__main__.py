@@ -124,6 +124,40 @@ class YouTubeDownloader:
         del video_itag
         del audio_itag
 
+    @staticmethod
+    def get_captions(url, filename, output_path):
+        """
+        Obtains the captions associated with the video.
+        """
+        video = pytube.YouTube(url)
+        print(
+            video.captions["en"].download(
+                title=filename, output_path=output_path, filename_prefix="caption"
+            )
+        )
+
+    def _get_captions(self, url, filename):
+        """
+        Internal method for downloading the captions associated with the video, if available.
+
+        Parameters
+        ----------
+        url : str
+            String representing the URL.
+        filename : str
+            The name of the caption file.
+
+        Returns
+        -------
+        None
+        """
+        video = pytube.YouTube(url)
+        has_en_captions = "en" in video.captions
+        if has_en_captions:
+            video.captions["en"].download(
+                title=filename, output_path=self.extract_path, filename_prefix="caption"
+            )
+
     def download_all_videos(self):
         """
         Downloads all the videos, using the links in ``self.url_list`` as a reference.
@@ -136,3 +170,9 @@ class YouTubeDownloader:
 
         with concurrent.futures.ThreadPoolExecutor(5) as executor:
             executor.map(self.download_video, self.url_list, filenames)
+
+    def download_all_captions(self):
+        filenames = ["{}".format(k) for k in range(self.n_urls)]
+
+        with concurrent.futures.ThreadPoolExecutor(5) as executor:
+            executor.map(self._get_captions, self.url_list, filenames)

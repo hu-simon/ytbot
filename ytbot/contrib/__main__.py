@@ -5,6 +5,7 @@ Python (non-tested) implementation of objects used to download videos from YouTu
 import os
 import re
 import time
+import shutil
 import configparser
 import concurrent.futures
 
@@ -38,10 +39,10 @@ class YouTubeDownloader:
         Downloaded videos will be stored in {extract_path}/media/video, audio will be stored in {extract_path}/media/audio, video captions will be stored in {extract_path}/media/captions/raw, and raw transcripts (from VGG dataset) will be stored in {extract_path}/media/captions/processed
 
         """
-        assert len(url_list) != 0
+        assert len(url_list) != 0, "Need at least one viable URL."
         self.url_list = url_list
         self.n_urls = len(self.url_list)
-        self._filter_available(verbose=True)
+        self._filter_available(verbose=True, remove_directory=True)
         self.extract_path = extract_path
 
     @staticmethod
@@ -82,7 +83,94 @@ class YouTubeDownloader:
 
         return valid_url
 
-    def _filter_available(self, verbose=True):
+    def _filter_available_nonthreading(self, verbose=True, remove_directory=False):
+        """Filters out video URLs by testing to see if the video is available, without threading.
+
+        Videos that are unavailable or do not exist can cause problems for the scraper.
+
+        Parameters
+        ----------
+        verbose : {True, False}, bool, optional
+            Determines if verbose output is output to the console, by default True.
+        remove_directory : {False, True}, bool, optional
+            If True, then the folder containing the data for the URL is removed.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        This function is now deprecated, in favor of using ``_filter_available_single_thread``.
+
+        """
+        for url in self.url_list:
+            valid_url = self._is_valid(url, verbose=verbose)
+            if not valid_url:
+                if verbose:
+                    print(
+                        "[INFO] {} is not a valid URL, removing it from the list".format(
+                            url
+                        )
+                    )
+                if remove_directory:
+                    folder_name = url.split("=")[1]
+                    if verbose:
+                        print(
+                            "[INFO] Deleting {}".format(
+                                os.path.join(self.extract_path, folder_name)
+                            )
+                        )
+                    shutil.rmtree(os.path.join(self.extract_path, folder_name))
+
+                self.url_list.remove(url)
+
+        self.n_urls = len(self.url_list)
+        assert (
+            self.n_urls > 0
+        ), "Not enough URLs to run the scraper, need at least one valid URL."
+
+    def _filter_available_single_thread(
+        self, url, verbose=True, remove_directory=False
+    ):
+        """Filters out video URLs by testing to see if the video is available, for a single thread.
+
+        Videos that are unavailable or do not exist can cause problems for the scraper, and the folders that host the videos can be removed using the ``remove_directory`` flag.
+
+        Parameters
+        ----------
+        url : str
+            The URL of the video to test availability.
+        verbose : {True, False}, bool, optional
+            Determines if verbose output is output to the console, by default True.
+        remove_directory : {False, True}, bool, optional
+            If True, then the folder containing the data for the URL is removed.
+        
+        Returns
+        -------
+        None
+
+        """
+        valid = self._is_valid(url, verbose=verbose)
+        if not valid:
+            if verbose:
+                print("[INFO] {} is not a valid url".format(url))
+
+            if remove_directory:
+                folder_name = url.split("=")[1]
+                if verbose:
+                    print(
+                        "[WARNING] Deleting {}".format(
+                            os.path.join(self.extract_path, folder_name)
+                        )
+                    )
+                shutil.rmtree(os.path.join(self.extract_path, folder_name))
+
+            self.url_list.remove(url)
+            self.n_urls = len(self.url_list)
+            assert self.n_urls > 0, "Not enough valid URLs to run the scraper."
+
+    def _filter_available(self, verbose=True, remove_directory=False):
         """Filters out video URLs by testing to see if the video is available. 
 
         Videos that are unavailable or do not exist can cause problems for the scraper.
@@ -91,17 +179,21 @@ class YouTubeDownloader:
         ----------
         verbose : {True, False}, bool, optional
             Determines if verbose output is output to the console, by default True.
+        remove_directory : {False, True}, bool, optional
+            If True, then the folders containing the data of invalid URLs are removed.
 
         Returns
         -------
         None
 
         """
-        # Need to figure out how we can share the same data. Or we can just store the URLs that are not valid and just remove them one by one.
-        # Perhaps it will be best to just remove them one by one, instead of having to do so much work.
-
-        self.n_urls = len(self.url_list)
-        assert self.n_urls != 0, "Need at least one viable URL."
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            executor.map(
+                self._filter_available_single_thread,
+                self.url_list,
+                [True] * self.n_urls,
+                [True] * self.n_urls,
+            )
 
     def _find_itags(self, video, best_video=True):
         """Finds the itags of the YouTube streams, and identifies the stream with the best resolution and audio quality.
@@ -145,8 +237,11 @@ class YouTubeDownloader:
                 base_resolution = resolution
                 video_itag = video_streams[0].itag
 
-        audio_streams = video.streams.filter(type="video", mime_type="audio/mp4")
+        audio_streams = video.streams.filter(type="audio", mime_type="audio/mp4")
         audio_itag = audio_streams[0].itag
+
+        # Debugging, delete later.
+        print("Found tags, {} and {}".format(video_itag, audio_itag))
 
         return {
             "video_itag": video_itag,
@@ -176,19 +271,19 @@ class YouTubeDownloader:
 
         if verbose:
             print(
-                "Tags found. video: {}, audio: {}.".format(
+                "[INFO] Tags found. video: {}, audio: {}.".format(
                     itags["video_itag"], itags["audio_itag"]
                 )
             )
 
         video_extract_path = os.path.join(
-            extract_path, "{}/media/video".format(url.split("=")[1])
+            self.extract_path, "{}/media/raw_video".format(url.split("=")[1])
         )
         audio_extract_path = os.path.join(
-            extract_path, "{}/media/audio".format(url.split("=")[1])
+            self.extract_path, "{}/media/raw_audio".format(url.split("=")[1])
         )
         caption_extract_path = os.path.join(
-            extract_path, "{}/media/captions/raw".format(url.split("=")[1])
+            self.extract_path, "{}/media/captions/raw".format(url.split("=")[1])
         )
 
         video.streams.get_by_itag(itags["video_itag"]).download(
@@ -202,7 +297,7 @@ class YouTubeDownloader:
         )
 
         if verbose:
-            print("Downloaded audio and video from {} successfully.".format(url))
+            print("[INFO] Downloaded audio and video from {} successfully.".format(url))
 
         del video
         del itags
@@ -218,6 +313,8 @@ class YouTubeDownloader:
             pytube.YouTube instance containing all the video information.
         name : str
             The name to be appened to the end of the captions header.
+        extract_path : str
+            The absolute path to the directory where video data will be stored, by default the current working directory. 
         code: str, optional
             The code representing the type of language we want to download the captions in, by default "en" 
         verbose : {True, False}, bool, optional
@@ -239,7 +336,7 @@ class YouTubeDownloader:
                     "Downloaded captions from {} successfully.".format(video.watch_url)
                 )
 
-    def _get_captions(self, url, name, verbose=True):
+    def _get_captions_using_url(self, url, name, verbose=True):
         """Extracts the captions associated with the YouTube video associated with ``url``.
 
         This function calls ``_get_captions`` as a subroutine, and the only difference is that this method passes the ``url`` instead of a pytube.YouTube instance.
@@ -282,7 +379,7 @@ class YouTubeDownloader:
 
         """
         names = ["{}".format(k) for k in range(self.n_urls)]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
             executor.map(
                 self._download_video, self.url_list, names, [True] * len(names)
             )
